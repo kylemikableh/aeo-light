@@ -27,6 +27,7 @@
 
 int main(int argc, char *argv[])
 {
+	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling); // Enable proper scaling on modern screens
 	QApplication a(argc, argv);
 
 	a.setOrganizationName("Interdisciplinary Mathematics Institute");
