@@ -7,65 +7,54 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 project(AEOLight VERSION 2.3.3)
 
 add_executable(AEOLight
-    aeoexception.h
     DPX.h
     DPXHeader.h
     DPXStream.h
-    extractdialog.h
-    FilmScan.h
-    frame_view_gl.h
-    mainwindow.h
-    metadata.h
-    openglwindow.h
-    overlap.h
-    preferencesdialog.h
-    project.h
-    readframedpx.h
-    readframeexr.h
-    readframetiff.h
-    savesampledialog.h
-    videoencoder.h
-    wav.h
-    writexml.h
-    extractdialog.cpp
     FilmScan.cpp
+    FilmScan.h
+    aeoexception.h
+    extractdialog.cpp
+    extractdialog.h
     frame_view_gl.cpp
+    frame_view_gl.h
     main.cpp
     mainwindow.cpp
+    mainwindow.h
     metadata.cpp
+    metadata.h
     openglwindow.cpp
+    openglwindow.h
+    overlap.h
     preferencesdialog.cpp
+    preferencesdialog.h
     project.cpp
+    project.h
     readframedpx.cpp
+    readframedpx.h
     readframeexr.cpp
+    readframeexr.h
     readframetiff.cpp
+    readframetiff.h
     savesampledialog.cpp
+    savesampledialog.h
     videoencoder.cpp
+    videoencoder.h
     wav.cpp
+    wav.h
     writexml.cpp
+    writexml.h
+    # QT Resources
+    images.qrc
+    license.qrc
+    shaders.qrc
+    # QT forms
+    mainwindow.ui
+    savesampledialog.ui
+    preferencesdialog.ui
+    extractdialog.ui
+    # MacOS icon
+    aeolight.icns
 )
-
-set_target_properties(AEOLight PROPERTIES
-    AUTOUIC ON
-    AUTOMOC ON
-)
-target_compile_definitions(AEOLight PUBLIC
-    APP_VERSION="${CMAKE_PROJECT_VERSION}"
-    APP_VERSION_STR="${CMAKE_PROJECT_VERSION}"
-)
-
-# Platform specific compile options
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    # gcc or clang on all platforms
-
-
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    # Despite what MS says, strncpy is not deprecated.
-    target_compile_definitions(AEOLight PUBLIC _CRT_SECURE_NO_WARNINGS)
-
-    # MSVC does not have 'dirent'. Use a wrapper
-    target_include_directories(AEOLight PUBLIC extern/dirent)
-endif()
 
 # Well-known dependencies
 find_package(Qt5 COMPONENTS Core Widgets Multimedia OpenGL REQUIRED)
@@ -73,6 +62,15 @@ find_package(OpenGL REQUIRED)
 find_package(TIFF REQUIRED)
 find_package(FFMPEG COMPONENTS avcodec avutil avformat swresample swscale REQUIRED)
 find_package(OpenEXR REQUIRED)
+
+# Build dspfilters from source; it already uses cmake
+add_subdirectory(extern/DSPFilters/shared/DSPFilters dspfilters)
+
+# Build dpx from source; sub in a 'compile everything' here to keep it simple.
+aux_source_directory(extern/dpx/libdpx DPX_SOURCES)
+add_library(dpx STATIC ${DPX_SOURCES})
+target_include_directories(dpx PUBLIC extern/dpx/libdpx)
+
 target_link_libraries(AEOLight PUBLIC
     ${OPENGL_LIBRARIES}
     Qt5::Core
@@ -86,13 +84,60 @@ target_link_libraries(AEOLight PUBLIC
     FFMPEG::swresample
     FFMPEG::swscale
     OpenEXR::OpenEXR
+    DSPFilters
+    dpx
 )
 
-## Uncommon dependencies that we'll build ourself.
-add_subdirectory(extern/DSPFilters/shared/DSPFilters dspfilters)
+# Add the version number to the source
+target_compile_definitions(AEOLight PUBLIC
+    APP_VERSION="${CMAKE_PROJECT_VERSION}"
+    APP_VERSION_STR="${CMAKE_PROJECT_VERSION}"
+)
 
-aux_source_directory(extern/dpx/libdpx DPX_SOURCES)
-add_library(dpx STATIC ${DPX_SOURCES})
-target_include_directories(dpx PUBLIC extern/dpx/libdpx)
+# Platform specific compile options
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    # gcc or clang on all platforms
 
-target_link_libraries(AEOLight PUBLIC DSPFilters dpx)
+    target_compile_options(AEOLight PUBLIC
+        -Wno-unused-private-field
+        -Wno-unused-variable
+        -Wno-unused-parameter
+        -Wno-ignored-qualifiers
+        -Wno-unused-function
+        -Wno-sign-compare
+        -Wno-unused-local-typedef
+        -Wno-reserved-user-defined-literal
+    )
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    # Visual Studio only
+
+    # Despite what MS says, strncpy is not deprecated.
+    target_compile_definitions(AEOLight PUBLIC _CRT_SECURE_NO_WARNINGS)
+    # MSVC does not have 'dirent'. Use a wrapper
+    target_include_directories(AEOLight PUBLIC extern/dirent)
+
+
+    target_compile_options(dpx PUBLIC 
+        # Unused variables
+        /wd4101
+
+        # sign mismatch
+        /wd4018
+    )
+
+    # Same thing, but for other compiled libs
+    target_compile_definitions(DSPFilters PUBLIC _SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING)
+    target_compile_definitions(dpx PUBLIC _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(dpx PUBLIC 
+        # Various int-truncation warnings
+        /wd4305 /wd4244 /wd4267
+    )
+endif()
+
+
+# More QT stuff
+set_target_properties(AEOLight PROPERTIES
+    AUTOUIC ON
+    AUTOMOC ON
+    AUTORCC ON
+)
