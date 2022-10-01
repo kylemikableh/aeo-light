@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+  "name": "aeo-light",
+  "dependencies": [
+    "qt5",
+    "ffmpeg",
+    "openexr",
+    {
+      "name": "dirent",
+      "platform": "windows"
+    },
+    "tiff"
+  ]
+}
