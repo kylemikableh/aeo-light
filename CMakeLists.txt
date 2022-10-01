@@ -6,7 +6,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 project(AEOLight VERSION 2.3.3)
 
-add_executable(AEOLight
+add_executable(AEOLight WIN32 MACOSX_BUNDLE
     DPX.h
     DPXHeader.h
     DPXStream.h
@@ -142,3 +142,15 @@ set_target_properties(AEOLight PROPERTIES
     AUTOMOC ON
     AUTORCC ON
 )
+
+# Handle app icons
+if (WIN32)
+    target_sources(AEOLight PRIVATE aeolight.rc)
+elseif(APPLE)
+    target_sources(AEOLight PRIVATE aeolight.icns)
+    set_source_files_properties(aeolight.icns PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources"
+    )
+elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+    # TODO: make a .desktop file for linux
+endif()
