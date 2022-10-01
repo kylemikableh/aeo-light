@@ -189,8 +189,8 @@ VideoEncoder::VideoEncoder(const char *filename)
 	if(outFmt->oformat->flags & AVFMT_GLOBALHEADER)
 	{
 		av_log(NULL, AV_LOG_INFO,
-				"videoCtx->flags |= CODEC_FLAG_GLOBAL_HEADER\n");
-		videoCtx->flags |= CODEC_FLAG_GLOBAL_HEADER;
+				"videoCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER\n");
+		videoCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 	}
 	// ******************************
 	// *** CONFIGURE AUDIO STREAM ***

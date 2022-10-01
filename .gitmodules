@@ -1,0 +1,6 @@
+[submodule "extern/DSPFilters"]
+	path = extern/DSPFilters
+	url = https://github.com/vinniefalco/DSPFilters
+[submodule "extern/dpx"]
+	path = extern/dpx
+	url = https://github.com/PatrickPalmer/dpx
