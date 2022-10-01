@@ -33,7 +33,7 @@ Compiling for Windows (Visual Studio)
 
 Getting required dependencies for native windows is generally hard. To make native windows binaries, it's recommended to install [vcpkg](https://vcpkg.io/en/getting-started.html) and use that to get them.
 
-`vcpkg install qt5:x64-windows ffmpeg:x64-windows tiff:x64-windows openexr:x64-windows`
+`vcpkg install qt5:x64-windows ffmpeg:x64-windows tiff:x64-windows openexr:x64-windows dirent:x64-windows`
 
 From there, instructions are identical to every other platform, except that you must tell cmake to look for requirements installed by vcpkg when first setting up the output directory, like so:
 

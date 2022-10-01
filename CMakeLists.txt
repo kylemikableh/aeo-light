@@ -113,9 +113,10 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 
     # Despite what MS says, strncpy is not deprecated.
     target_compile_definitions(AEOLight PUBLIC _CRT_SECURE_NO_WARNINGS)
-    # MSVC does not have 'dirent'. Use a wrapper
-    target_include_directories(AEOLight PUBLIC extern/dirent)
 
+    # MSVC does not have 'dirent'. Use a wrapper
+    find_path(DIRENT_INCLUDE_DIRS "dirent.h")
+    target_include_directories(AEOLight PRIVATE ${DIRENT_INCLUDE_DIRS})
 
     target_compile_options(dpx PUBLIC 
         # Unused variables
