@@ -1,4 +1,7 @@
 /build*/
 /.vscode/
+/.vs/
+/out/
+CMakeSettings.json
 
 env.ps1

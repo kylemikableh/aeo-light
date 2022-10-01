@@ -4,7 +4,7 @@
 cmake_minimum_required(VERSION 3.13)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-project(AEOLight VERSION 2.3.3)
+project(AEOLight VERSION 3.0.0)
 
 add_executable(AEOLight
     DPX.h
