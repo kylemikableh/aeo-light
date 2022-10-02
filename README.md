@@ -22,7 +22,12 @@ TODO
 Compiling for Linux/MacOS/Windows-MSYS2
 ---------------------------------------
 
-1. Install required dependencies (TODO)
+1. Install required dependencies:
+
+   **Ubuntu/Debian**: `sudo apt install build-essential git cmake qt5-default qtmultimedia5-dev libtiff-dev libavcodec-dev libavformat-dev libswscale-dev libopenexr-dev`
+
+   **Others**: TODO
+
 2. Get the code onto your local machine: `git clone --recursive <this page> && cd aeo-light`
 3. Set up the output directory: `cmake -S. -Bbuild`
 4. Compile: `cmake --build build -j$(nproc)`

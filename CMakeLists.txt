@@ -62,6 +62,13 @@ find_package(OpenGL REQUIRED)
 find_package(TIFF REQUIRED)
 find_package(FFMPEG COMPONENTS avcodec avutil avformat swresample swscale REQUIRED)
 find_package(OpenEXR REQUIRED)
+if (TARGET OpenEXR::OpenEXR)
+    # 3.x
+    set(OpenEXR_TARGET OpenEXR::OpenEXR)
+else()
+    # 2.x
+    set(OpenEXR_TARGET OpenEXR::IlmImf)
+endif()
 
 # Build dspfilters from source; it already uses cmake
 add_subdirectory(extern/DSPFilters/shared/DSPFilters dspfilters)
@@ -83,7 +90,7 @@ target_link_libraries(AEOLight PUBLIC
     FFMPEG::avformat
     FFMPEG::swresample
     FFMPEG::swscale
-    OpenEXR::OpenEXR
+    ${OpenEXR_TARGET}
     DSPFilters
     dpx
 )
