@@ -126,6 +126,7 @@ typedef int SourceFormat;
 #define SOURCE_LIBAV 4
 #define SOURCE_WAV 5
 #define SOURCE_UNKNOWN 6
+#define SOURCE_ALL 7
 
 class FilmScan {
 private:
@@ -162,6 +163,7 @@ public:
 	~FilmScan();
 
 	void Reset();
+	int getType(const std::string filename);
 	bool Source(const std::string filename, SourceFormat fmt=SOURCE_UNKNOWN);
 	bool SourceDPX(const std::string filename);
 	bool SourceEXR(const std::string filename);
