@@ -6,7 +6,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 project(AEOLight VERSION 3.0.0)
 
-add_executable(AEOLight
+add_executable(AEOLight WIN32 MACOSX_BUNDLE
     DPX.h
     DPXHeader.h
     DPXStream.h
@@ -62,6 +62,13 @@ find_package(OpenGL REQUIRED)
 find_package(TIFF REQUIRED)
 find_package(FFMPEG COMPONENTS avcodec avutil avformat swresample swscale REQUIRED)
 find_package(OpenEXR REQUIRED)
+if (TARGET OpenEXR::OpenEXR)
+    # 3.x
+    set(OpenEXR_TARGET OpenEXR::OpenEXR)
+else()
+    # 2.x
+    set(OpenEXR_TARGET OpenEXR::IlmImf)
+endif()
 
 # Build dspfilters from source; it already uses cmake
 add_subdirectory(extern/DSPFilters/shared/DSPFilters dspfilters)
@@ -83,7 +90,7 @@ target_link_libraries(AEOLight PUBLIC
     FFMPEG::avformat
     FFMPEG::swresample
     FFMPEG::swscale
-    OpenEXR::OpenEXR
+    ${OpenEXR_TARGET}
     DSPFilters
     dpx
 )
@@ -113,9 +120,10 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 
     # Despite what MS says, strncpy is not deprecated.
     target_compile_definitions(AEOLight PUBLIC _CRT_SECURE_NO_WARNINGS)
-    # MSVC does not have 'dirent'. Use a wrapper
-    target_include_directories(AEOLight PUBLIC extern/dirent)
 
+    # MSVC does not have 'dirent'. Use a wrapper
+    find_path(DIRENT_INCLUDE_DIRS "dirent.h")
+    target_include_directories(AEOLight PRIVATE ${DIRENT_INCLUDE_DIRS})
 
     target_compile_options(dpx PUBLIC 
         # Unused variables
@@ -141,3 +149,15 @@ set_target_properties(AEOLight PROPERTIES
     AUTOMOC ON
     AUTORCC ON
 )
+
+# Handle app icons
+if (WIN32)
+    target_sources(AEOLight PRIVATE aeolight.rc)
+elseif(APPLE)
+    target_sources(AEOLight PRIVATE aeolight.icns)
+    set_source_files_properties(aeolight.icns PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources"
+    )
+elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+    # TODO: make a .desktop file for linux
+endif()

@@ -22,24 +22,54 @@ TODO
 Compiling for Linux/MacOS/Windows-MSYS2
 ---------------------------------------
 
-1. Install required dependencies (TODO)
+1. Install required dependencies:
+
+   **Ubuntu/Debian**: `sudo apt install build-essential git cmake qt5-default qtmultimedia5-dev libtiff-dev libavcodec-dev libavformat-dev libswscale-dev libopenexr-dev`
+
+   **Others**: TODO
+
 2. Get the code onto your local machine: `git clone --recursive <this page> && cd aeo-light`
-3. Make an output directory: `mkdir build`
-4. Set up the output directory: `cmake -S. -Bbuild`
-5. Compile: `cmake --build build -j$(nproc)`
+3. Set up the output directory: `cmake -S. -Bbuild`
+4. Compile: `cmake --build build -j$(nproc)`
 
 Compiling for Windows (Visual Studio)
 -------------------------------------
 
-Getting required dependencies for native windows is generally hard. To make native windows binaries, it's recommended to install [vcpkg](https://vcpkg.io/en/getting-started.html) and use that to get them.
+ 1. Ensure the following system tools are installed:
+    - Visual Studio
+    - CMake
+    - Git
+    - [Vcpkg](https://vcpkg.io/en/getting-started.html)
 
-`vcpkg install qt5:x64-windows ffmpeg:x64-windows tiff:x64-windows openexr:x64-windows`
 
-From there, instructions are identical to every other platform, except that you must tell cmake to look for requirements installed by vcpkg when first setting up the output directory, like so:
+ 2. Open a "Developer Command Prompt" for your version of Visual Studio
 
-`cmake -S. -Bbuild -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake`
+ 3. Get the code onto your local machine:
+ 
+    ```
+    git clone --recursive <this page>
+    cd aeo-light
+    ```
 
-Also note that the steps must be done on the 'Developer Command Prompt' that gets installed with visual studio.
+ 4. Build required system libraries: `vcpkg install`
+
+    > Note that this will compile some large video and GUI libraries from scratch and will take a very long time (sometimes over an hour), but it only needs to be done once.
+
+ 5. Set up a build directory for cmake, specifying that you want to use packages from vcpkg:
+    
+    `cmake -S. -Bbuild -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake`
+
+    > If you're using VS Code with the 'CMake' plugin, you can set the following instead:
+    > 
+    > ```
+    > "cmake.configureSettings": {
+    >    "CMAKE_TOOLCHAIN_FILE": "[path to vcpkg]/scripts/buildsystems/vcpkg.cmake"
+    > }
+    > ```
+
+ 6. Open the `AEOLight.sln` file in the build directory to open the project in Visual Studio. From there, build or debug as desired.
+
+    > On the command line, you can run `cmake --build build -j [number of cores]` to just build it.
 
 License
 -------

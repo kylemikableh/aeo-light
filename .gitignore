@@ -3,5 +3,5 @@
 /.vs/
 /out/
 CMakeSettings.json
-
+/vcpkg*/
 env.ps1

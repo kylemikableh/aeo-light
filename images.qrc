@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
         <file>logos2.png</file>
+        <file>aeolight.png</file>
     </qresource>
 </RCC>

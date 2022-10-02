@@ -34,6 +34,7 @@ int main(int argc, char *argv[])
 	a.setOrganizationDomain("imi.cas.sc.edu");
 	a.setApplicationName("AEO-Light");
 	a.setApplicationVersion(APP_VERSION_STR);
+	a.setWindowIcon(QIcon(":/aeolight.png"));
 
 	MainWindow w;
 
