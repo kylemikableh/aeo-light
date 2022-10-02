@@ -303,6 +303,19 @@ SourceFormat FilmScan::StrToSourceFormat(const char *str)
 	return i;
 }
 
+/**
+ * For the source that is all, determine the type
+ */ 
+int FilmScan::getType(const std::string filename) 
+{
+	std::string trimmed = filename.substr(filename.find_last_of(".") + 1);
+	if (trimmed == "dpx") {return SOURCE_DPX;}
+	if (trimmed == "mov" || trimmed == "mp4" || trimmed == "avi")  {return SOURCE_LIBAV;}
+	if (trimmed == "wav") {return SOURCE_WAV;}
+	if (trimmed == "tiff" || trimmed == "tif") {return SOURCE_TIFF;}
+	return SOURCE_LIBAV;
+}
+
 //-----------------------------------------------------------------------------
 bool FilmScan::Source(const std::string filename, SourceFormat fmt)
 {
@@ -312,22 +325,26 @@ bool FilmScan::Source(const std::string filename, SourceFormat fmt)
 	if(fmt != SOURCE_UNKNOWN)
 	{
 		this->srcFormat = fmt;
+		if (fmt == SOURCE_ALL)
+		{
+			fmt = getType(filename);
+		}
 		switch(fmt)
 		{
-		case SOURCE_DPX:
-			if(SourceDPX(filename)) return true;
-			break;
-		case SOURCE_TIFF:
-			if(SourceTIFF(filename)) return true;
-			break;
-		case SOURCE_LIBAV:
-			if(SourceLibAV(filename)) return true;
-			break;
-		case SOURCE_WAV:
-			if(SourceWav(filename)) return true;
-			break;
-		default:
-			throw AeoException("Unrecognized FileType Request");
+			case SOURCE_DPX:
+				if(SourceDPX(filename)) return true;
+				break;
+			case SOURCE_TIFF:
+				if(SourceTIFF(filename)) return true;
+				break;
+			case SOURCE_LIBAV:
+				if(SourceLibAV(filename)) return true;
+				break;
+			case SOURCE_WAV:
+				if(SourceWav(filename)) return true;
+				break;
+			default:
+				throw AeoException("Unrecognized FileType Request");
 		}
 	}
 	else

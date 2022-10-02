@@ -820,6 +820,7 @@ void MainWindow::on_sourceButton_clicked()
 		SourceFormat fileType;
 		const char *filter;
 	} fileFilterArr[] = {
+		{ SOURCE_ALL,       "Video/Photo files (*.mp4 *.mov *.avi *.dpx *.wav *.tif *.tiff)" },
 		{ SOURCE_DPX,       "DPX frames (*.dpx)" },
 		{ SOURCE_LIBAV,     "Video files (*.mp4 *.mov *.avi)" },
 		{ SOURCE_WAV,       "Synthetic (*.wav)" },
