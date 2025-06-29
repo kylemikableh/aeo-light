@@ -109,6 +109,7 @@ public:
 	int requestedSamplingRate;
 	int requestedSamplesPerFrame;
 	int requestedTimeBase;
+	AVCodecContext *enc_ctx;
 
 	AVStream *st;
 

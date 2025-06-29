@@ -124,38 +124,48 @@ Video::~Video()
 //----------------------------------------------------------------------------
 bool Video::ReadNextFrame(size_t currfnum)
 {
-	AVPacket packet;
-	int done;
-	int frame_id;
+    AVPacket packet;
+    int ret;
+    bool got_frame = false;
 
-	//if(this->frameNative == NULL) this->frameNative = av_frame_alloc();
+    // Clear the frame before decoding
+    av_frame_unref(this->frameNative);
 
-	while(av_read_frame(this->format, &packet)>=0)
-	{
-		// Is this a packet from the right stream?
-		if(packet.stream_index == this->streamIdx)
-		{
-			// Decode video frame
-			avcodec_decode_video2(this->codec, this->frameNative, &done,
-					&packet);
+    while (av_read_frame(this->format, &packet) >= 0) {
+        if (packet.stream_index == this->streamIdx) {
+            // Send the packet to the decoder
+            ret = avcodec_send_packet(this->codec, &packet);
+            av_packet_unref(&packet);
+            if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
+                // Serious error
+                return false;
+            }
 
-			// Did we get a complete video frame?
-			if(done)
-			{
-				this->dts = packet.dts;
-				this->curFrame = currfnum;
-				// this->curFrame = (this->dts - this->dtsBase)/this->dtsStep + 1;
-
-				av_packet_unref(&packet);
-				return true;
-			}
-		}
-		av_packet_unref(&packet);
-	}
-	this->dts = 0;
-	this->curFrame = 0;
-
-	return false;
+            // Receive all available frames from the decoder
+            while (true) {
+                ret = avcodec_receive_frame(this->codec, this->frameNative);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                    break;
+                } else if (ret < 0) {
+                    // Serious error
+                    return false;
+                }
+                // Got a frame!
+                this->dts = packet.dts;
+                this->curFrame = currfnum;
+                got_frame = true;
+                break;
+            }
+            if (got_frame) {
+                return true;
+            }
+        } else {
+            av_packet_unref(&packet);
+        }
+    }
+    this->dts = 0;
+    this->curFrame = 0;
+    return false;
 }
 
 bool Video::ReadFrame(size_t frameNum = 0)
@@ -737,7 +747,6 @@ bool FilmScan::SourceLibAV(const std::string filename)
 	#ifdef USELIBAV
 	{
 	// accept any recognized codec
-	av_register_all();
 
 	vid = new Video;
 
@@ -772,7 +781,7 @@ bool FilmScan::SourceLibAV(const std::string filename)
 	vid->streamIdx = -1;
 	for(int i=0; i<vid->format->nb_streams; ++i)
 	{
-		if(vid->format->streams[i]->codec->codec_type==AVMEDIA_TYPE_VIDEO)
+		if(vid->format->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
 		{
 			vid->streamIdx=i;
 			DE = av_dict_get(vid->format->streams[i]->metadata,"timecode",NULL ,0);
@@ -826,7 +835,7 @@ bool FilmScan::SourceLibAV(const std::string filename)
 		vid->streamIdx = -1;
 		for(int i=0; i<vid->format->nb_streams; ++i)
 		{
-			if(vid->format->streams[i]->codec->codec_type==AVMEDIA_TYPE_VIDEO)
+			if(vid->format->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
 			{
 				vid->streamIdx=i;
 				break;
@@ -848,10 +857,11 @@ bool FilmScan::SourceLibAV(const std::string filename)
 		// TODO: if it doesn't know, guess based on duration and then validate.
 		//
 		this->numFrames =
-				(int)(( vid->format->streams[vid->streamIdx]->duration /
-					(double)AV_TIME_BASE ) *
-					vid->format->streams[vid->streamIdx]->codec->time_base.den +
-					0.5);
+			(int)(
+				(vid->format->streams[vid->streamIdx]->duration *
+				av_q2d(vid->format->streams[vid->streamIdx]->time_base)
+				) + 0.5
+			);
 
 		/* FAILED ATTEMPT TO USE LIBAV TO READ IMAGES
 		if(this->numFrames < 0)
@@ -872,35 +882,31 @@ bool FilmScan::SourceLibAV(const std::string filename)
 	this->firstFrame = 0;
 
 	AVCodecContext *codecOrig;
-	AVCodec *decoder;
+	// AVCodec *decoder;
 
-	// Get a pointer to the codec context for the video stream
-	codecOrig=vid->format->streams[vid->streamIdx]->codec;
-
-	// Find the decoder for the video stream
-	decoder=avcodec_find_decoder(codecOrig->codec_id);
-	if(decoder==NULL)
-	{
+	// Modern FFmpeg
+	AVCodecParameters *codecpar = vid->format->streams[vid->streamIdx]->codecpar;
+	const AVCodec *decoder = avcodec_find_decoder(codecpar->codec_id);
+	if (!decoder) {
 		avformat_close_input(&(vid->format));
 		delete vid;
 		vid = NULL;
 		throw AeoException("Unsupported codec.");
 	}
-
-	// Copy codec context
 	vid->codec = avcodec_alloc_context3(decoder);
-	if(avcodec_copy_context(vid->codec, codecOrig) != 0)
-	{
+	if (!vid->codec) {
 		avformat_close_input(&(vid->format));
 		delete vid;
 		vid = NULL;
-		throw AeoException("Couldn't copy codec context");
+		throw AeoException("Couldn't allocate codec context");
 	}
-	avcodec_close(codecOrig);
-
-	// Open codec
-	if(avcodec_open2(vid->codec, decoder, NULL)<0)
-	{
+	if (avcodec_parameters_to_context(vid->codec, codecpar) < 0) {
+		avformat_close_input(&(vid->format));
+		delete vid;
+		vid = NULL;
+		throw AeoException("Couldn't copy codec parameters");
+	}
+	if (avcodec_open2(vid->codec, decoder, NULL) < 0) {
 		avformat_close_input(&(vid->format));
 		delete vid;
 		vid = NULL;
