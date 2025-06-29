@@ -4,7 +4,7 @@
 cmake_minimum_required(VERSION 3.13)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-project(AEOLight VERSION 3.0.0)
+project(AEOLight VERSION 3.0.1)
 
 add_executable(AEOLight WIN32 MACOSX_BUNDLE
     DPX.h
@@ -78,6 +78,8 @@ aux_source_directory(/Users/kyle/codeprojects/extern/dpx/libdpx DPX_SOURCES)
 add_library(dpx STATIC ${DPX_SOURCES})
 target_include_directories(dpx PUBLIC /Users/kyle/codeprojects/extern/dpx/libdpx)
 
+include_directories(/Users/kyle/codeprojects/aeo-light/build/vcpkg_installed/arm64-osx/include)
+
 target_link_libraries(AEOLight PUBLIC
     ${OPENGL_LIBRARIES}
     Qt5::Core
@@ -93,6 +95,7 @@ target_link_libraries(AEOLight PUBLIC
     ${OpenEXR_TARGET}
     DSPFilters
     dpx
+    "-framework VideoToolbox -framework CoreMedia -framework CoreVideo -framework AVFoundation"
 )
 
 # Add the version number to the source

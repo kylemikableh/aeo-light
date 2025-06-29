@@ -72,6 +72,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+
+// #include <libavutil/version.h>
+
 extern "C"
 {
 #include <libavutil/avassert.h>
@@ -95,6 +98,16 @@ extern "C"
 	av_make_error_string((char*)__builtin_alloca(AV_ERROR_MAX_STRING_SIZE), \
 	AV_ERROR_MAX_STRING_SIZE, errnum)
 #endif
+
+#if LIBAVUTIL_VERSION_MAJOR >= 57
+// TODO: Why the fuck is this not resolving
+    // #define GET_NB_CHANNELS(frame) av_channel_layout_nb_channels(&(frame)->ch_layout)
+	#define GET_NB_CHANNELS(frame) 2
+#else
+    #define GET_NB_CHANNELS(frame) av_get_channel_layout_nb_channels((frame)->channel_layout)
+#endif
+
+#define APP_VERSION_STR "3.0.0"
 
 
 #endif // ifdef USE_MUX_HACK
@@ -272,7 +285,7 @@ MainWindow::MainWindow(QWidget *parent) :
 	QSettings settings;
 	QString ag = settings.value("license","0.1").toString();
 	QVersionNumber agv = QVersionNumber::fromString(ag);
-	QVersionNumber thisv = QVersionNumber::fromString(APP_VERSION);
+	QVersionNumber thisv = QVersionNumber::fromString(APP_VERSION_STR);
 
 	Log() << "Starting project: " << startingProjectFilename << "\n";
 
@@ -496,7 +509,7 @@ void MainWindow::LicenseAgreement()
 		exit(0);
 
 	QSettings settings;
-	settings.setValue("license",APP_VERSION);
+	settings.setValue("license",APP_VERSION_STR);
 
 	return;
 }
@@ -2111,8 +2124,8 @@ AVFrame *MainWindow::GetAudioFromQueue()
 	av_log(NULL, AV_LOG_INFO, "audio render offset = %lld\n", offset);
 	av_log(NULL, AV_LOG_INFO, "audio render len = %lld\n", this->encAudioLen);
 
-	if(this->encS16Frame->channels != 2)
-		throw AeoException("sound must be stereo");
+	if(GET_NB_CHANNELS(this->encS16Frame) != 2)
+    	throw AeoException("sound must be stereo");
 
 	int16_t *samples = (int16_t *)(this->encS16Frame->data[0]);
 	int s = 0;
@@ -2123,13 +2136,13 @@ AVFrame *MainWindow::GetAudioFromQueue()
 	{
 		for(int i = 0; i<this->encS16Frame->nb_samples; ++i)
 		{
-			for(int c = 0; c < this->encS16Frame->channels; ++c)
+			for(int c = 0; c < GET_NB_CHANNELS(this->encS16Frame); ++c)
 			{
 				samples[s++] = 0;
 			}
 		}
 		av_log(NULL, AV_LOG_INFO, "Silence written nb_samples = %d x%d\n",
-				this->encS16Frame->nb_samples, this->encS16Frame->channels);
+				this->encS16Frame->nb_samples, GET_NB_CHANNELS(this->encS16Frame));
 	}
 	else
 	{
@@ -2138,10 +2151,10 @@ AVFrame *MainWindow::GetAudioFromQueue()
 		av_log(NULL, AV_LOG_INFO, "audio = FileRealBuffer = [%p,%p]\n",
 				audio[0], audio[1]);
 		av_log(NULL, AV_LOG_INFO, "Audio copy nb_samples = %d x%d\n",
-				this->encS16Frame->nb_samples, this->encS16Frame->channels);
+				this->encS16Frame->nb_samples, GET_NB_CHANNELS(this->encS16Frame));
 		for(int i = 0; i<this->encS16Frame->nb_samples; ++i)
 		{
-			for(int c = 0; c < this->encS16Frame->channels; ++c)
+			for(int c = 0; c < GET_NB_CHANNELS(this->encS16Frame); ++c)
 			{
 				//av_log(NULL, AV_LOG_INFO, "reading audio[%d][%lld]\n", c, offset+i);
 				v = int32_t(
@@ -2151,7 +2164,7 @@ AVFrame *MainWindow::GetAudioFromQueue()
 			}
 		}
 		av_log(NULL, AV_LOG_INFO, "Audio copied nb_samples = %d x%d\n",
-				this->encS16Frame->nb_samples, this->encS16Frame->channels);
+				this->encS16Frame->nb_samples, GET_NB_CHANNELS(this->encS16Frame));
 	}
 
 	this->encS16Frame->pts = this->encAudioNextPts;
@@ -2186,7 +2199,7 @@ static int write_frame(AVFormatContext *fmt_ctx, const AVRational *time_base, AV
 
 /* Add an output stream. */
 static void add_stream(OutputStream *ost, AVFormatContext *oc,
-					   AVCodec **codec,
+					   const AVCodec **codec,
 					   enum AVCodecID codec_id)
 {
 	AVCodecContext *c;
@@ -2207,10 +2220,17 @@ static void add_stream(OutputStream *ost, AVFormatContext *oc,
 		exit(1);
 	}
 	av_log(NULL, AV_LOG_INFO,
-			"ALLOC new: MainWindowStream01 ost->st->codec = %p\n",
-			ost->st->codec);
+			"ALLOC new: MainWindowStream01 ost->enc_ctx = %p\n",
+			ost->enc_ctx);
 	ost->st->id = oc->nb_streams-1;
-	c = ost->st->codec;
+
+    ost->enc_ctx = avcodec_alloc_context3(*codec);
+    if (!ost->enc_ctx) {
+        fprintf(stderr, "Could not allocate encoding context\n");
+        exit(1);
+    }
+
+	c = ost->enc_ctx;
 
 	switch ((*codec)->type) {
 	case AVMEDIA_TYPE_AUDIO:
@@ -2234,17 +2254,21 @@ static void add_stream(OutputStream *ost, AVFormatContext *oc,
 		}
 		*/
 
-		if ((*codec)->channel_layouts) {
-			c->channel_layout = (*codec)->channel_layouts[0];
-			for (i = 0; (*codec)->channel_layouts[i]; i++) {
-				if ((*codec)->channel_layouts[i] == AV_CH_LAYOUT_STEREO)
-					c->channel_layout = AV_CH_LAYOUT_STEREO;
-			}
-		}
-		else
-			c->channel_layout = AV_CH_LAYOUT_STEREO;
+		// if ((*codec)->channel_layouts) {
+		// 	c->channel_layout = (*codec)->channel_layouts[0];
+		// 	for (i = 0; (*codec)->channel_layouts[i]; i++) {
+		// 		if ((*codec)->channel_layouts[i] == AV_CH_LAYOUT_STEREO)
+		// 			c->channel_layout = AV_CH_LAYOUT_STEREO;
+		// 	}
+		// }
+		// else
+		// 	c->channel_layout = AV_CH_LAYOUT_STEREO;
 
-		c->channels = av_get_channel_layout_nb_channels(c->channel_layout);
+		// c->channels = av_get_channel_layout_nb_channels(c->channel_layout);
+
+		av_channel_layout_default(&c->ch_layout, GET_NB_CHANNELS()); // 2 for stereo
+		// Get number of channels
+		// TODO: WHY?! NO?! EXIST?!
 
 		ost->st->time_base.num = 1;
 		ost->st->time_base.den = c->sample_rate;
@@ -2308,31 +2332,31 @@ static void add_stream(OutputStream *ost, AVFormatContext *oc,
 /* audio output */
 
 static AVFrame *alloc_audio_frame(enum AVSampleFormat sample_fmt,
-								  uint64_t channel_layout,
-								  int sample_rate, int nb_samples)
+                                  const AVChannelLayout *ch_layout,
+                                  int sample_rate, int nb_samples)
 {
-	AVFrame *frame = av_frame_alloc();
-	int ret;
+    AVFrame *frame = av_frame_alloc();
+    int ret;
 
-	if (!frame) {
-		fprintf(stderr, "Error allocating an audio frame\n");
-		exit(1);
-	}
+    if (!frame) {
+        fprintf(stderr, "Error allocating an audio frame\n");
+        exit(1);
+    }
 
-	frame->format = sample_fmt;
-	frame->channel_layout = channel_layout;
-	frame->sample_rate = sample_rate;
-	frame->nb_samples = nb_samples;
+    frame->format = sample_fmt;
+    av_channel_layout_copy(&frame->ch_layout, ch_layout);
+    frame->sample_rate = sample_rate;
+    frame->nb_samples = nb_samples;
 
-	if (nb_samples) {
-		ret = av_frame_get_buffer(frame, 0);
-		if (ret < 0) {
-			fprintf(stderr, "Error allocating an audio buffer\n");
-			exit(1);
-		}
-	}
+    if (nb_samples) {
+        ret = av_frame_get_buffer(frame, 0);
+        if (ret < 0) {
+            fprintf(stderr, "Error allocating an audio buffer\n");
+            exit(1);
+        }
+    }
 
-	return frame;
+    return frame;
 }
 
 static void open_audio(AVFormatContext *oc, AVCodec *codec, OutputStream *ost, AVDictionary *opt_arg)
@@ -2342,7 +2366,7 @@ static void open_audio(AVFormatContext *oc, AVCodec *codec, OutputStream *ost, A
 	int ret;
 	AVDictionary *opt = NULL;
 
-	c = ost->st->codec;
+	c = ost->enc_ctx;
 
 	/* open it */
 	av_dict_copy(&opt, opt_arg, 0);
@@ -2369,12 +2393,12 @@ static void open_audio(AVFormatContext *oc, AVCodec *codec, OutputStream *ost, A
 		nb_samples = c->frame_size;
 
 	// allocid: MainWindowFrame01
-	ost->frame     = alloc_audio_frame(c->sample_fmt, c->channel_layout,
+	ost->frame     = alloc_audio_frame(c->sample_fmt, &c->ch_layout,
 									   c->sample_rate, nb_samples);
 	av_log(NULL, AV_LOG_INFO, "ALLOC new: MainWindowFrame01 ost->frame = %p\n",
 			ost->frame);
 	// allocid: MainWindowFrame02
-	ost->tmp_frame = alloc_audio_frame(AV_SAMPLE_FMT_S16, c->channel_layout,
+	ost->tmp_frame = alloc_audio_frame(AV_SAMPLE_FMT_S16, &c->ch_layout,
 									   c->sample_rate, nb_samples);
 	av_log(NULL, AV_LOG_INFO,
 			"ALLOC new: MainWindowFrame02 ost->tmp_frame = %p\n",
@@ -2391,10 +2415,10 @@ static void open_audio(AVFormatContext *oc, AVCodec *codec, OutputStream *ost, A
 			ost->swr_ctx);
 
 	/* set options */
-	av_opt_set_int       (ost->swr_ctx, "in_channel_count",   c->channels,       0);
+	av_opt_set_int       (ost->swr_ctx, "in_channel_count",   GET_NB_CHANNELS(),       0);
 	av_opt_set_int       (ost->swr_ctx, "in_sample_rate",     c->sample_rate,    0);
 	av_opt_set_sample_fmt(ost->swr_ctx, "in_sample_fmt",      AV_SAMPLE_FMT_S16, 0);
-	av_opt_set_int       (ost->swr_ctx, "out_channel_count",  c->channels,       0);
+	av_opt_set_int       (ost->swr_ctx, "out_channel_count",  GET_NB_CHANNELS(),       0);
 	av_opt_set_int       (ost->swr_ctx, "out_sample_rate",    c->sample_rate,    0);
 	av_opt_set_sample_fmt(ost->swr_ctx, "out_sample_fmt",     c->sample_fmt,     0);
 
@@ -2416,15 +2440,15 @@ AVFrame *MainWindow::get_audio_frame(OutputStream *ost)
 	avr_one.num = avr_one.den = 1;
 
 	/* check if we want to generate more frames */
-	if (av_compare_ts(ost->next_pts, ost->st->codec->time_base,
+	if (av_compare_ts(ost->next_pts, ost->enc_ctx->time_base,
 					  STREAM_DURATION, avr_one) >= 0)
 		return NULL;
 
 	av_log(NULL, AV_LOG_INFO, "Audio generate nb_samples = %d x%d\n",
-			frame->nb_samples, ost->st->codec->channels);
+			frame->nb_samples, GET_NB_CHANNELS());
 	for (j = 0; j <frame->nb_samples; j++) {
 		v = (int)(sin(ost->t) * 10000);
-		for (i = 0; i < ost->st->codec->channels; i++)
+		for (i = 0; i < GET_NB_CHANNELS(); i++)
 			*q++ = v;
 		ost->t     += ost->tincr;
 		ost->tincr += ost->tincr2;
@@ -2452,7 +2476,7 @@ int MainWindow::write_audio_frame(AVFormatContext *oc, OutputStream *ost)
 	int dst_nb_samples;
 
 	av_init_packet(&pkt);
-	c = ost->st->codec;
+	c = ost->enc_ctx;
 
 #if 0
 	frame = get_audio_frame(ost);
@@ -2497,17 +2521,41 @@ int MainWindow::write_audio_frame(AVFormatContext *oc, OutputStream *ost)
 		frame->pts = av_rescale_q(ost->samples_count, r, c->time_base);
 		ost->samples_count += dst_nb_samples;
 
-		ret = avcodec_encode_audio2(c, &pkt, frame, &got_packet);
+		// ret = avcodec_encode_audio2(c, &pkt, frame, &got_packet);
+		// if (ret < 0) {
+		// 	fprintf(stderr, "Error encoding audio frame: %s\n", aeo_av_err2str(ret));
+		// 	exit(1);
+		// }
+
+		// if (got_packet) {
+		// 	ret = write_frame(oc, &c->time_base, ost->st, &pkt);
+		// 	if (ret < 0) {
+		// 		fprintf(stderr, "Error while writing audio frame: %s\n",
+		// 				aeo_av_err2str(ret));
+		// 		exit(1);
+		// 	}
+		// }
+
+		ret = avcodec_send_frame(c, frame);
 		if (ret < 0) {
-			fprintf(stderr, "Error encoding audio frame: %s\n", aeo_av_err2str(ret));
+			fprintf(stderr, "Error sending the frame to the encoder: %s\n", aeo_av_err2str(ret));
 			exit(1);
 		}
 
-		if (got_packet) {
+		while (ret >= 0) {
+			ret = avcodec_receive_packet(c, &pkt);
+			if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+				break;
+			else if (ret < 0) {
+				fprintf(stderr, "Error encoding audio frame: %s\n", aeo_av_err2str(ret));
+				exit(1);
+			}
+
+			// Write the packet
 			ret = write_frame(oc, &c->time_base, ost->st, &pkt);
+			av_packet_unref(&pkt);
 			if (ret < 0) {
-				fprintf(stderr, "Error while writing audio frame: %s\n",
-						aeo_av_err2str(ret));
+				fprintf(stderr, "Error while writing audio frame: %s\n", aeo_av_err2str(ret));
 				exit(1);
 			}
 		}
@@ -2545,7 +2593,7 @@ static AVFrame *alloc_picture(enum AVPixelFormat pix_fmt, int width, int height)
 static void open_video(AVFormatContext *oc, AVCodec *codec, OutputStream *ost, AVDictionary *opt_arg)
 {
 	int ret;
-	AVCodecContext *c = ost->st->codec;
+	AVCodecContext *c = ost->enc_ctx;
 	AVDictionary *opt = NULL;
 
 	av_log(NULL, AV_LOG_INFO, "av_dict_copy(&opt, opt_arg, 0)\n");
@@ -2637,7 +2685,7 @@ static void fill_rgba_image(AVFrame *pict, int frame_index,
 
 	i = frame_index;
 
-	av_log(NULL, AV_LOG_INFO, "pict->channels: %d\n", pict->channels);
+	av_log(NULL, AV_LOG_INFO, "pict->channels: %d\n", GET_NB_CHANNELS());
 	av_log(NULL, AV_LOG_INFO, "pict->data[0]: %p\n", pict->data[0]);
 	av_log(NULL, AV_LOG_INFO, "pict->data[1]: %p\n", pict->data[1]);
 	av_log(NULL, AV_LOG_INFO, "pict->data[2]: %p\n", pict->data[2]);
@@ -2661,7 +2709,8 @@ static void fill_rgba_image(AVFrame *pict, int frame_index,
 
 AVFrame *MainWindow::get_video_frame(OutputStream *ost)
 {
-	AVCodecContext *c = ost->st->codec;
+	
+	AVCodecContext *c = ost->enc_ctx;
 
 #if 0
 	/* check if we want to generate more frames */
@@ -2787,7 +2836,7 @@ int MainWindow::write_video_frame(AVFormatContext *oc, OutputStream *ost)
 	pkt.data = NULL;
 	pkt.size = 0;
 
-	c = ost->st->codec;
+	c = ost->enc_ctx;
 
 	av_log(NULL, AV_LOG_INFO, "frame = get_video_frame(ost)\n");
 	frame = get_video_frame(ost);
@@ -2796,23 +2845,48 @@ int MainWindow::write_video_frame(AVFormatContext *oc, OutputStream *ost)
 	av_init_packet(&pkt);
 
 	/* encode the image */
-	av_log(NULL, AV_LOG_INFO, "ret = avcodec_encode_video2(c, &pkt, frame, &got_packet)\n");
-	ret = avcodec_encode_video2(c, &pkt, frame, &got_packet);
+	// av_log(NULL, AV_LOG_INFO, "ret = avcodec_encode_video2(c, &pkt, frame, &got_packet)\n");
+	// ret = avcodec_encode_video2(c, &pkt, frame, &got_packet);
+	// if (ret < 0) {
+	// 	fprintf(stderr, "Error encoding video frame: %s\n", aeo_av_err2str(ret));
+	// 	exit(1);
+	// }
+
+	// if (got_packet) {
+	// 	av_log(NULL, AV_LOG_INFO, "ret = write_frame(oc, &c->time_base, ost->st, &pkt)\n");
+	// 	ret = write_frame(oc, &c->time_base, ost->st, &pkt);
+	// } else {
+	// 	ret = 0;
+	// }
+
+	// if (ret < 0) {
+	// 	fprintf(stderr, "Error while writing video frame: %s\n", aeo_av_err2str(ret));
+	// 	exit(1);
+	// }
+
+	av_log(NULL, AV_LOG_INFO, "ret = avcodec_send_frame(c, frame)\n");
+	ret = avcodec_send_frame(c, frame);
 	if (ret < 0) {
-		fprintf(stderr, "Error encoding video frame: %s\n", aeo_av_err2str(ret));
+		fprintf(stderr, "Error sending the frame to the encoder: %s\n", aeo_av_err2str(ret));
 		exit(1);
 	}
 
-	if (got_packet) {
+	while (ret >= 0) {
+		ret = avcodec_receive_packet(c, &pkt);
+		if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+			break;
+		else if (ret < 0) {
+			fprintf(stderr, "Error encoding video frame: %s\n", aeo_av_err2str(ret));
+			exit(1);
+		}
+
 		av_log(NULL, AV_LOG_INFO, "ret = write_frame(oc, &c->time_base, ost->st, &pkt)\n");
-		ret = write_frame(oc, &c->time_base, ost->st, &pkt);
-	} else {
-		ret = 0;
-	}
-
-	if (ret < 0) {
-		fprintf(stderr, "Error while writing video frame: %s\n", aeo_av_err2str(ret));
-		exit(1);
+		int write_ret = write_frame(oc, &c->time_base, ost->st, &pkt);
+		av_packet_unref(&pkt);
+		if (write_ret < 0) {
+			fprintf(stderr, "Error while writing video frame: %s\n", aeo_av_err2str(write_ret));
+			exit(1);
+		}
 	}
 
 	return (frame || got_packet) ? 0 : 1;
@@ -2822,9 +2896,9 @@ static void close_stream(AVFormatContext *oc, OutputStream *ost)
 {
 	// allocid: MainWindowStream01
 	av_log(NULL, AV_LOG_INFO,
-			"ALLOC del: MainWindowStream01 ost->st->codec = %p\n",
-			ost->st->codec);
-	avcodec_close(ost->st->codec);
+			"ALLOC del: MainWindowStream01 ost->enc_ctx = %p\n",
+			ost->enc_ctx);
+	avcodec_close(ost->enc_ctx);
 
 	// allocid: MainWindowFrame01
 	// allocid: MainWindowFrame03
@@ -2869,10 +2943,10 @@ int MainWindow::MuxMain(const char *fn_arg, long startFrame, long numFrames,
 	memset(&video_st, 0, sizeof(OutputStream));
 	memset(&audio_st, 0, sizeof(OutputStream));
 	const char *filename = NULL;
-	AVOutputFormat *fmt = NULL;
+	const AVOutputFormat *fmt = NULL;
 	AVFormatContext *oc = NULL;
-	AVCodec *audio_codec = NULL;
-	AVCodec *video_codec = NULL;
+	const AVCodec *audio_codec = NULL;
+	const AVCodec *video_codec = NULL;
 	int ret;
 	int have_video = 0, have_audio = 0;
 	int encode_video = 0, encode_audio = 0;
@@ -2897,7 +2971,6 @@ int MainWindow::MuxMain(const char *fn_arg, long startFrame, long numFrames,
 		/* Initialize libavcodec, and register all codecs and formats. */
 		av_log(NULL, AV_LOG_INFO, "av_register_all()\n");
 
-		av_register_all();
 		needRegisterAll = false;
 	}
 
@@ -2970,7 +3043,7 @@ int MainWindow::MuxMain(const char *fn_arg, long startFrame, long numFrames,
 	/* Now that all the parameters are set, we can open the audio and
 	 * video codecs and allocate the necessary encode buffers. */
 	if (have_video)
-		open_video(oc, video_codec, &video_st, opt);
+		open_video(oc, (AVCodec *)video_codec, &video_st, opt);
 
 	/*
 	av_log(NULL, AV_LOG_INFO, "this->encRGBFrame = alloc_picture(AV_PIX_FMT_RGBA,%d,%d)\n",
@@ -2990,7 +3063,7 @@ int MainWindow::MuxMain(const char *fn_arg, long startFrame, long numFrames,
 		throw AeoException("Could not allocate encRGBFrame buffer");
 
 	if (have_audio)
-		open_audio(oc, audio_codec, &audio_st, opt);
+		open_audio(oc, (AVCodec *)audio_codec, &audio_st, opt);
 
 	av_dump_format(oc, 0, filename, 1);
 
@@ -3059,8 +3132,8 @@ int MainWindow::MuxMain(const char *fn_arg, long startFrame, long numFrames,
 	while (encode_video || encode_audio) {
 		/* select the stream to encode */
 		if (encode_video &&
-			(!encode_audio || av_compare_ts(video_st.next_pts, video_st.st->codec->time_base,
-											audio_st.next_pts, audio_st.st->codec->time_base) <= 0)) {
+			(!encode_audio || av_compare_ts(video_st.next_pts, video_st.enc_ctx->time_base,
+              								audio_st.next_pts, audio_st.enc_ctx->time_base) <= 0)) {
 			av_log(NULL, AV_LOG_INFO, "encode_video = !write_video_frame(oc, &video_st)\n");
 			encode_video = !write_video_frame(oc, &video_st);
 		} else {
@@ -3634,7 +3707,7 @@ void MainWindow::on_actionAbout_triggered()
 			"Sciences Interdisciplinary Mathematics Institute (IMI), with "
 			"contributions from Tommy Aschenbach (Video & Film Solutions). "
 			"\n\n"
-			"Project funding comes from the Preservation and Access Division"
+			"Project funding comes from the Preservation and Accesås Division"
 			"of the National Endowment for the Humanities. AEO-Light is "
 			"available through an open-source licensing agreement. The "
 			"complete terms are available in the AEO-Light Documentation."
