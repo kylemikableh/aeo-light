@@ -66,7 +66,7 @@ private:
 
 	                               // corresponding variable in muxing.c
 	AVCodec *audioCodec;           // audio_codec
-	AVCodec *videoCodec;           // video_codec
+	const AVCodec *videoCodec;           // video_codec
 
 	AVStream *audioStream;         // audio_st->st
 	AVStream *videoStream;         // video_st->st
@@ -81,6 +81,8 @@ private:
 	AVFrame *videoFrameOut;        // video_st->frame
 	SwsContext *videoRescaleCtx;   // video_st->sws_ctx
 	int64_t videoNumFrames;        // video_st->samples_count
+
+	AVCodecContext *videoCtx; // Add this line
 };
 
 #endif // VIDEOENCODER_H

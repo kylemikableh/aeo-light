@@ -100,10 +100,8 @@ VideoEncoder::VideoEncoder(const char *filename)
 		THROW("Filename too long for libav's hardcoded length setting");
 
 	av_log(NULL, AV_LOG_INFO, "av_register_all()\n");
-	av_register_all();
 
 	av_log(NULL, AV_LOG_INFO, "avcodec_register_all()\n");
-	avcodec_register_all();
 
 	// *** Create the output context based on the filename ***
 	av_log(NULL, AV_LOG_INFO, "avformat_alloc_output_context2()\n");
@@ -116,9 +114,9 @@ VideoEncoder::VideoEncoder(const char *filename)
 		if(!outFmt) THROW("Could not allocate output context");
 
 		// filename max length is hardcoded at 1024 characters, incl. NULL
-		if(sizeof(outFmt->filename) <= strlen(filename))
+		if(sizeof(outFmt->url) <= strlen(filename))
 			THROW("Filename too long for libav's hardcoded length setting");
-		strcpy(outFmt->filename, filename);
+		strcpy(outFmt->url, filename);
 
 		av_log(NULL, AV_LOG_INFO, "--av_guess_format()\n");
 		outFmt->oformat = av_guess_format(NULL, filename, NULL);
@@ -148,7 +146,7 @@ VideoEncoder::VideoEncoder(const char *filename)
 	//videoCtx = avcodec_alloc_context3(videoCodec);
 	//if (!videoCtx) THROW("Could not allocate video codec context");
 	av_log(NULL, AV_LOG_INFO, "videoCtx = videoStream->codec\n");
-	AVCodecContext *videoCtx = videoStream->codec;
+	AVCodecContext *videoCtx = videoCtx;
 
 	av_log(NULL, AV_LOG_INFO, "videoCtx->bit_rate = 400000\n");
 	av_log(NULL, AV_LOG_INFO, "videoCtx->width = 640\n");
@@ -437,7 +435,16 @@ void VideoEncoder::Open()
 	if(!outFmt) return;
 
 	av_log(NULL, AV_LOG_INFO, "videoCtx = videoStream->codec\n");
-	AVCodecContext *videoCtx = videoStream->codec;
+
+	// ...existing code...
+	av_log(NULL, AV_LOG_INFO, "videoCtx = avcodec_alloc_context3(videoCodec)\n");
+	this->videoCtx = avcodec_alloc_context3(videoCodec);
+	if (!videoCtx) THROW("Could not allocate video codec context");
+	if (avcodec_parameters_to_context(videoCtx, videoStream->codecpar) < 0)
+		THROW("Could not copy codec parameters to context");
+	// ...existing code...
+
+	// AVCodecContext *videoCtx = videoStream->codec;
 
 #ifdef DO_AUDIO
 	av_log(NULL, AV_LOG_INFO, "AVCodecContext *audioCtx = audioStream->codec\n");
@@ -521,7 +528,7 @@ void VideoEncoder::Open()
 	{
 		av_log(NULL, AV_LOG_INFO,
 				"avio_open(&outFmt->pb, outFmt->filename, AVIO_FLAG_WRITE)\n");
-		if(avio_open(&outFmt->pb, outFmt->filename, AVIO_FLAG_WRITE) < 0)
+		if(avio_open(&outFmt->pb, outFmt->url, AVIO_FLAG_WRITE) < 0)
 			THROW("Could not open output file.");
 	}
 
@@ -544,7 +551,13 @@ void VideoEncoder::Close()
 	avcodec_close(audioStream->codec);
 #endif
 	av_log(NULL, AV_LOG_INFO, "avcodec_close(videoStream->codec)\n");
-	avcodec_close(videoStream->codec);
+
+	if (this->videoCtx) {
+		avcodec_free_context(&this->videoCtx);
+		this->videoCtx = nullptr;
+	}
+
+	// avcodec_close(videoStream->codec);
 
 	if(!(outFmt->flags & AVFMT_NOFILE))
 	{
@@ -595,7 +608,7 @@ void VideoEncoder::WriteVideoFrame(const FrameTexture *frame)
 	//memcpy(this->videoFrameIn->data[0], frame->buf, frame->bufSize);
 
 	av_log(NULL, AV_LOG_INFO, "videoCtx = this->videoStream->codec\n");
-	AVCodecContext *videoCtx = this->videoStream->codec;
+	AVCodecContext *videoCtx = this->videoCtx;
 
 	/* when we pass a frame to the encoder, it may keep a reference to it
 	 * internally;
@@ -640,20 +653,30 @@ void VideoEncoder::WriteVideoFrame(const FrameTexture *frame)
 		av_packet_rescale_ts(&pkt, videoCtx->time_base,
 				this->videoStream->time_base);
 
-		int got_packet;
-		av_log(NULL, AV_LOG_INFO,
-				"avcodec_encode_video2(videoCtx, &pkt, videoFrameOut, &got)\n");
-		ret = avcodec_encode_video2(
-				videoCtx, &pkt, this->videoFrameOut, &got_packet);
-		if(ret < 0)	THROW("failed to encode video frame");
+		// Replace avcodec_encode_video2 with send/receive API
+		ret = avcodec_send_frame(videoCtx, this->videoFrameOut);
+		if (ret < 0)
+			THROW("failed to send video frame to encoder");
 
-		if(got_packet)
-		{
+		while (ret >= 0) {
+			AVPacket pkt;
+			av_init_packet(&pkt);
+			pkt.data = NULL;
+			pkt.size = 0;
+
+			ret = avcodec_receive_packet(videoCtx, &pkt);
+			if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+				break;
+			else if (ret < 0)
+				THROW("failed to receive packet from encoder");
+
 			log_packet(this->outFmt, &pkt);
 			av_log(NULL, AV_LOG_INFO,
 					"av_interleaved_write_frame(this->outFmt, &pkt)\n");
-			ret = av_interleaved_write_frame(this->outFmt, &pkt);
-			if(ret < 0)	THROW("Error writing video frame to output");
+			int write_ret = av_interleaved_write_frame(this->outFmt, &pkt);
+			if(write_ret < 0)	THROW("Error writing video frame to output");
+
+			av_packet_unref(&pkt);
 		}
 
 		av_log(NULL, AV_LOG_INFO, "av_packet_unref(&pkt)\n");
