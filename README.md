@@ -59,6 +59,8 @@ Compiling for Windows (Visual Studio)
     
     `cmake -S. -Bbuild -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake`
 
+    Commit with version 4.4.3 of ffmpeg `cff6ed45719c0162fa7065fdac90506a0add812c`
+
     > If you're using VS Code with the 'CMake' plugin, you can set the following instead:
     > 
     > ```

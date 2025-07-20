@@ -71,14 +71,14 @@ else()
 endif()
 
 # Build dspfilters from source; it already uses cmake
-add_subdirectory(/Users/kyle/codeprojects/extern/DSPFilters/shared dspfilters)
+add_subdirectory(extern/DSPFilters/shared dspfilters)
 
 # Build dpx from source; sub in a 'compile everything' here to keep it simple.
-aux_source_directory(/Users/kyle/codeprojects/extern/dpx/libdpx DPX_SOURCES)
+aux_source_directory(extern/dpx/libdpx DPX_SOURCES)
 add_library(dpx STATIC ${DPX_SOURCES})
-target_include_directories(dpx PUBLIC /Users/kyle/codeprojects/extern/dpx/libdpx)
+target_include_directories(dpx PUBLIC extern/dpx/libdpx)
 
-include_directories(/Users/kyle/codeprojects/aeo-light/build/vcpkg_installed/arm64-osx/include)
+#include_directories(/Users/kyle/codeprojects/aeo-light/build/vcpkg_installed/arm64-osx/include)
 
 target_link_libraries(AEOLight PUBLIC
     ${OPENGL_LIBRARIES}
