@@ -95,8 +95,14 @@ target_link_libraries(AEOLight PUBLIC
     ${OpenEXR_TARGET}
     DSPFilters
     dpx
-    "-framework VideoToolbox -framework CoreMedia -framework CoreVideo -framework AVFoundation"
 )
+
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+    # Only link these frameworks on Linux
+    target_link_libraries(AEOLight PUBLIC
+        "-framework VideoToolbox -framework CoreMedia -framework CoreVideo -framework AVFoundation"
+    )
+endif()
 
 # Add the version number to the source
 target_compile_definitions(AEOLight PUBLIC
@@ -161,6 +167,6 @@ elseif(APPLE)
     set_source_files_properties(aeolight.icns PROPERTIES
         MACOSX_PACKAGE_LOCATION "Resources"
     )
-elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+elseif(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     # TODO: make a .desktop file for linux
 endif()

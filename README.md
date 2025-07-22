@@ -24,7 +24,8 @@ Compiling for Linux/MacOS/Windows-MSYS2
 
 1. Install required dependencies:
 
-   **Ubuntu/Debian**: `sudo apt install build-essential git cmake qt5-default qtmultimedia5-dev libtiff-dev libavcodec-dev libavformat-dev libswscale-dev libopenexr-dev`
+   **Ubuntu/Debian**: `sudo apt install build-essential git cmake qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools qtmultimedia5-dev libtiff-dev libavcodec-dev libavformat-dev libswscale-dev libopenexr-dev autoconf automake autoconf-archive libltdl-dev bison libxi-dev libxtst-dev libxcb-xinerama0-dev libxcb-sync-dev libx11-* libx11* libxcb-* libxcb* libxkbcommon-x11-dev`
+
 
    **Others**: TODO
 
