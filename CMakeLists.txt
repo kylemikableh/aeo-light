@@ -97,8 +97,8 @@ target_link_libraries(AEOLight PUBLIC
     dpx
 )
 
-if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-    # Only link these frameworks on Linux
+if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+    # Only link these frameworks when NOT on Linux
     target_link_libraries(AEOLight PUBLIC
         "-framework VideoToolbox -framework CoreMedia -framework CoreVideo -framework AVFoundation"
     )
